@@ -1,54 +1,98 @@
-# Q&A Chatbot
-#from langchain.llms import OpenAI
+# Q&A Chatbot using Gemini and Image Upload
 
 from dotenv import load_dotenv
-
-load_dotenv()  # take environment variables from .env.
+load_dotenv()  # Load environment variables from .env
 
 import streamlit as st
 import os
-import pathlib
-import textwrap
 from PIL import Image
-
-
 import google.generativeai as genai
 
-
-os.getenv("GOOGLE_API_KEY")
+# Configure Gemini API Key
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-## Function to load OpenAI model and get respones
-
-
-
-def get_gemini_response(input,image):
+# Function to get response from Gemini
+def get_gemini_response(input, image):
     model = genai.GenerativeModel('gemini-1.5-flash')
-    if input!="":
-       response = model.generate_content([input,image])
+    if input != "":
+        response = model.generate_content([input, image])
     else:
-       response = model.generate_content(image)
+        response = model.generate_content(image)
     return response.text
 
-##initialize our streamlit app
+# Set Streamlit page config
+st.set_page_config(page_title="Freedom Guide")
 
-st.set_page_config(page_title="Gemini Image Demo")
+# Add background image, custom font, and label styling
+page_style = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins&display=swap');
 
-st.header("Gemini Application")
-input=st.text_input("Input Prompt: ",key="input")
+html, body, [class*="css"]  {
+    font-family: 'Poppins', sans-serif;
+    color: black !important;
+}
+
+/* Background image */
+[data-testid="stAppViewContainer"] {
+    background-image: url("https://thumbs.dreamstime.com/b/watercolor-background-india-republic-day-celebration-indian-flag-fighter-jets-formation-show-national-tricolor-banner-367157745.jpg");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+
+/* Remove default header background */
+[data-testid="stHeader"] {
+    background-color: rgba(0,0,0,0);
+}
+
+/* Black title */
+.black-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: black;
+    margin-bottom: 10px;
+}
+
+/* Force black label text */
+label, .stTextInput label, .stFileUploader label,
+.st-bb, .st-c6, .st-cg, .st-cb, .st-ch {
+    color: black !important;
+    font-weight: 600;
+}
+</style>
+"""
+st.markdown(page_style, unsafe_allow_html=True)
+
+# Custom black header
+st.markdown('<h1 class="black-title"></h1>', unsafe_allow_html=True)
+
+# Input prompt
+input = st.text_input("Input Prompt:", key="input")
+
+# Image uploader
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
-image=""   
+image = ""
+
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
     st.image(image, caption="Uploaded Image.", use_column_width=True)
 
+# Submit button
+submit = st.button("Tell me about the image")
 
-submit=st.button("Tell me about the image")
-
-## If ask button is clicked
-
+# If submit button clicked
 if submit:
-    
-    response=get_gemini_response(input,image)
-    st.subheader("The Response is")
-    st.write(response)
+    response = get_gemini_response(input, image)
+
+    # Display Gemini response in styled box
+    st.markdown(
+        f"""
+        <div style="background-color: black; color: white; padding: 15px; border-radius: 10px;
+                    font-family: 'Poppins', sans-serif; margin-top: 20px;">
+            <h4>The Response is:</h4>
+            <p>{response}</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
