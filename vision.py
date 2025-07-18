@@ -1,98 +1,119 @@
-# Q&A Chatbot using Gemini and Image Upload
-
-from dotenv import load_dotenv
-load_dotenv()  # Load environment variables from .env
-
 import streamlit as st
 import os
-from PIL import Image
-import google.generativeai as genai
+from langchain_groq import ChatGroq
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains import create_retrieval_chain
+from langchain_community.vectorstores import FAISS
+from langchain_community.document_loaders import PyPDFDirectoryLoader
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from dotenv import load_dotenv
+import time
 
-# Configure Gemini API Key
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# Set background image
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-image: url("https://saveindia108.in/wp-content/uploads/2025/05/Untitled-design-1-2.png");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-# Function to get response from Gemini
-def get_gemini_response(input, image):
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    if input != "":
-        response = model.generate_content([input, image])
-    else:
-        response = model.generate_content(image)
-    return response.text
+# Load environment variables
+load_dotenv()
 
-# Set Streamlit page config
-st.set_page_config(page_title="Freedom Guide")
+# Load the GROQ and Google API Keys
+groq_api_key = os.getenv('GROQ_API_KEY')
+os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
 
-# Add background image, custom font, and label styling
-page_style = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins&display=swap');
+# Initialize LLM
+llm = ChatGroq(groq_api_key=groq_api_key, model_name="Llama3-8b-8192")
 
-html, body, [class*="css"]  {
-    font-family: 'Poppins', sans-serif;
-    color: black !important;
-}
+# Prompt Template
+prompt = ChatPromptTemplate.from_template("""
+Answer the questions and explain fully about the Indias Related information only based on the given context.
+Please provide the accurate response based on the question.
 
-/* Background image */
-[data-testid="stAppViewContainer"] {
-    background-image: url("https://thumbs.dreamstime.com/b/watercolor-background-india-republic-day-celebration-indian-flag-fighter-jets-formation-show-national-tricolor-banner-367157745.jpg");
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-}
+<context>
+{context}
+<context>
+Questions: {input}
+""")
 
-/* Remove default header background */
-[data-testid="stHeader"] {
-    background-color: rgba(0,0,0,0);
-}
+# Initialize session state
+if "vectors" not in st.session_state:
+    st.session_state.vectors = None
 
-/* Black title */
-.black-title {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: black;
-    margin-bottom: 10px;
-}
+def vector_embedding():
+    st.session_state.embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    st.session_state.loader = PyPDFDirectoryLoader("./us_census")  # Replace with your PDF directory
+    st.session_state.docs = st.session_state.loader.load()
+    st.session_state.text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    st.session_state.final_documents = st.session_state.text_splitter.split_documents(st.session_state.docs[:20])
+    st.session_state.vectors = FAISS.from_documents(st.session_state.final_documents, st.session_state.embeddings)
 
-/* Force black label text */
-label, .stTextInput label, .stFileUploader label,
-.st-bb, .st-c6, .st-cg, .st-cb, .st-ch {
-    color: black !important;
-    font-weight: 600;
-}
-</style>
-"""
-st.markdown(page_style, unsafe_allow_html=True)
+# Input
+prompt1 = st.text_input("Enter Your Question From Documents")
 
-# Custom black header
-st.markdown('<h1 class="black-title"></h1>', unsafe_allow_html=True)
-
-# Input prompt
-input = st.text_input("Input Prompt:", key="input")
-
-# Image uploader
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
-image = ""
-
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image.", use_column_width=True)
-
-# Submit button
-submit = st.button("Tell me about the image")
-
-# If submit button clicked
-if submit:
-    response = get_gemini_response(input, image)
-
-    # Display Gemini response in styled box
+# Button to Embed Documents
+if st.button("Documents Embedding"):
+    vector_embedding()
     st.markdown(
-        f"""
-        <div style="background-color: black; color: white; padding: 15px; border-radius: 10px;
-                    font-family: 'Poppins', sans-serif; margin-top: 20px;">
-            <h4>The Response is:</h4>
-            <p>{response}</p>
+        """
+        <div style="background-color: black; padding: 15px; border-radius: 10px;">
+            <p style="color: #00FF7F; font-weight: bold; font-size: 16px;">✅ Vector Store DB is ready.</p>
         </div>
         """,
         unsafe_allow_html=True
     )
+
+# Answering the Question
+if prompt1:
+    if st.session_state.vectors is not None:
+        document_chain = create_stuff_documents_chain(llm, prompt)
+        retriever = st.session_state.vectors.as_retriever()
+        retrieval_chain = create_retrieval_chain(retriever, document_chain)
+        start = time.process_time()
+        response = retrieval_chain.invoke({'input': prompt1})
+
+        # Response time
+        st.markdown(
+            f"""
+            <div style="background-color: black; padding: 10px; border-radius: 10px; margin-top: 10px;">
+                <p style="color: #FFD700; font-size: 14px;">🕐 Response time: <b>{round(time.process_time() - start, 2)} seconds</b></p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # Answer block
+        st.markdown("### 📝 Answer:")
+        st.markdown(
+            f"""
+            <div style="background-color: black; padding: 15px; border-radius: 10px;">
+                <p style="color: white; font-size: 16px;">{response['answer']}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # Document Similarity Search (fixed color)
+        with st.expander("📄 Document Similarity Search"):
+            for i, doc in enumerate(response["context"]):
+                st.markdown(
+                    f"""
+                    <div style="background-color: black; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
+                        <p style="color: white; font-size: 14px;">{doc.page_content}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+    else:
+        st.error("❌ Please embed the documents first by clicking 'Documents Embedding'.")
