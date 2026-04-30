@@ -16,4 +16,25 @@ DocMind is an advanced **Retrieval-Augmented Generation (RAG)** application that
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ Architecture Overview 
+
+
+User Query
+↓
+Streamlit UI
+↓
+PDF Upload & Text Extraction
+↓
+Text Chunking
+↓
+Embedding Generation (OpenAI)
+↓
+FAISS Vector Database
+↓
+Similarity Search
+↓
+Relevant Context Retrieved
+↓
+LLM (OpenAI) → Answer Generation
+↓
+Response Displayed to User
